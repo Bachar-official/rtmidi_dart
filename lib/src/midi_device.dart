@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:ffi';
-import 'dart:typed_data';  // Для asTypedList
 import 'package:ffi/ffi.dart';
 import 'bindings.dart';
 
@@ -21,27 +20,27 @@ class MidiDevice {
   }) : _bindings = bindings;
 
   void open() {
-    // Create per-device instances (фикс shared!)
+    // Create per-device instances
     _inPtr = _bindings.rtmidi_in_create_default();
     _outPtr = _bindings.rtmidi_out_create_default();
 
     final portNameUtf8 = 'dart_rtmidi_$name'.toNativeUtf8();
 
-    // Open ports с index
+    // Open ports with index
     _bindings.rtmidi_open_port(_inPtr!, portIndex, portNameUtf8.cast<Char>());
     _bindings.rtmidi_open_port(_outPtr!, portIndex, portNameUtf8.cast<Char>());
     malloc.free(portNameUtf8);
 
-    // Ignore types: не игнорить ничего
+    // Ignore types
     _bindings.rtmidi_in_ignore_types(_inPtr!, false, false, false);
 
     // Setup stream
     _controller = StreamController<List<int>>.broadcast();
 
-    // Start polling (5ms для low-latency, без лагов)
+    // Start polling (5ms for low-latency)
     _startPolling();
 
-    // Чек ошибки после open
+    // Error check after open()
     if (!_inPtr!.ref.ok) {
       final errMsg = _inPtr!.ref.msg.cast<Utf8>().toDartString();
       print('Error opening device $name: $errMsg');
@@ -53,16 +52,15 @@ class MidiDevice {
   }
 
   void _startPolling() {
-    const interval = Duration(milliseconds: 5);  // 5ms ~200Hz, хватит для MIDI
+    const interval = Duration(milliseconds: 5);  // 5ms ~200Hz
     _pollTimer = Timer.periodic(interval, (_) {
       final sizePtr = calloc<Size>()..value = 1024;  // Max MIDI msg ~1024 (sysex)
       final buf = calloc<UnsignedChar>(1024);
-      final delta = _bindings.rtmidi_in_get_message(_inPtr!, buf, sizePtr);  // Читаем queue
-      final size = sizePtr.value as int;
+      _bindings.rtmidi_in_get_message(_inPtr!, buf, sizePtr);
+      final size = sizePtr.value;
       if (size > 0) {
         final data = buf.cast<Uint8>().asTypedList(size).toList();
         _controller!.add(data);
-        print('MIDI in: $data');  // Debug лог (убери потом)
       }
       calloc.free(buf);
       calloc.free(sizePtr);

@@ -10,11 +10,19 @@ class RtMidi {
 
   RtMidi() : _bindings = RtMidiFFI(_loadLibrary());
 
+  // static DynamicLibrary _loadLibrary() {
+  //   if (Platform.isLinux || Platform.isAndroid) return DynamicLibrary.open('librtmidi.so');
+  //   if (Platform.isWindows) return DynamicLibrary.open('rtmidi.dll');
+  //   throw UnsupportedError('Platform not supported');
+  // }
+
   static DynamicLibrary _loadLibrary() {
-    if (Platform.isLinux || Platform.isAndroid) return DynamicLibrary.open('librtmidi.so');
-    if (Platform.isWindows) return DynamicLibrary.open('rtmidi.dll');
-    if (Platform.isMacOS || Platform.isIOS) return DynamicLibrary.open('librtmidi.dylib');
-    throw UnsupportedError('Platform not supported');
+    try {
+      return DynamicLibrary.open('librtmidi');
+    } catch (e) {
+      // fallback: текущая папка
+      return DynamicLibrary.open('librtmidi.so');
+    }
   }
 
   RtMidiFFI get bindings => _bindings;
@@ -29,12 +37,12 @@ class RtMidi {
     if (name.isNotEmpty) {
       devices.add(MidiDevice(
         name: name,
-        portIndex: i,  // Передаём index!
+        portIndex: i,
         bindings: _bindings,
       ));
     }
   }
-  _bindings.rtmidi_in_free(tempInPtr);  // Free temp после всего — фикс утечки
+  _bindings.rtmidi_in_free(tempInPtr);
   return devices;
 }
 

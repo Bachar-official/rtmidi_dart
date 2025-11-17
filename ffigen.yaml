@@ -4,4 +4,13 @@ output: lib/src/bindings.dart
 
 headers:
   entry-points:
-    - /usr/include/rtmidi/rtmidi_c.h
+    - src/rtmidi/rtmidi_c.h
+  include-directives:
+    - src/rtmidi/*.h
+
+compiler-opts:
+  - "-Isrc/rtmidi"
+  - "-DRTMIDI_BUILD"
+
+preamble: |
+  // Auto-generated from bundled RtMidi 6.0.0 (MIT License)
