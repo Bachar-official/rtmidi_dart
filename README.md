@@ -27,8 +27,7 @@ It allows you to interact with input and output devices in a unified way, making
 
 ### Prerequisites
 
-- Install the RtMidi library on your system:
-  - **Linux**: `sudo apt install librtmidi-dev`
+- Dart
 
 ## Usage
 

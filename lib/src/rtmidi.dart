@@ -1,5 +1,4 @@
 import 'dart:ffi';
-import 'dart:io';
 import 'package:ffi/ffi.dart';
 
 import 'bindings.dart';
@@ -9,12 +8,6 @@ class RtMidi {
   final RtMidiFFI _bindings;
 
   RtMidi() : _bindings = RtMidiFFI(_loadLibrary());
-
-  // static DynamicLibrary _loadLibrary() {
-  //   if (Platform.isLinux || Platform.isAndroid) return DynamicLibrary.open('librtmidi.so');
-  //   if (Platform.isWindows) return DynamicLibrary.open('rtmidi.dll');
-  //   throw UnsupportedError('Platform not supported');
-  // }
 
   static DynamicLibrary _loadLibrary() {
     try {
