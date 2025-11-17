@@ -1,0 +1,6 @@
+native_assets:
+  sources:
+    - src/rtmidi
+  build:
+    hook:
+      file: hook/build.dart
