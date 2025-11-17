@@ -20,24 +20,23 @@ class RtMidi {
   RtMidiFFI get bindings => _bindings;
 
   Future<List<MidiDevice>> get devices async {
-    final inPtr = _bindings.rtmidi_in_create_default();
-    final outPtr = _bindings.rtmidi_out_create_default();
-    final count = _bindings.rtmidi_get_port_count(inPtr);
+  final tempInPtr = _bindings.rtmidi_in_create_default();
+  final count = _bindings.rtmidi_get_port_count(tempInPtr);
 
-    final devices = <MidiDevice>[];
-    for (var i = 0; i < count; i++) {
-      final name = _getPortName(inPtr, i);
-      if (name.isNotEmpty) {
-        devices.add(MidiDevice(
-          name: name,
-          inPtr: inPtr,
-          outPtr: outPtr,
-          bindings: _bindings,
-        ));
-      }
+  final devices = <MidiDevice>[];
+  for (var i = 0; i < count; i++) {
+    final name = _getPortName(tempInPtr, i);
+    if (name.isNotEmpty) {
+      devices.add(MidiDevice(
+        name: name,
+        portIndex: i,  // Передаём index!
+        bindings: _bindings,
+      ));
     }
-    return devices;
   }
+  _bindings.rtmidi_in_free(tempInPtr);  // Free temp после всего — фикс утечки
+  return devices;
+}
 
   String _getPortName(Pointer<RtMidiWrapper> device, int port) {
     final lenPtr = calloc<Int>();

@@ -1,65 +1,104 @@
 import 'dart:async';
 import 'dart:ffi';
+import 'dart:typed_data';  // Для asTypedList
 import 'package:ffi/ffi.dart';
 import 'bindings.dart';
 
 class MidiDevice {
   final String name;
-  final Pointer<RtMidiWrapper> _inPtr;
-  final Pointer<RtMidiWrapper> _outPtr;
+  final int portIndex;
   final RtMidiFFI _bindings;
 
+  Pointer<RtMidiWrapper>? _inPtr;
+  Pointer<RtMidiWrapper>? _outPtr;
   StreamController<List<int>>? _controller;
   Timer? _pollTimer;
 
   MidiDevice({
     required this.name,
-    required Pointer<RtMidiWrapper> inPtr,
-    required Pointer<RtMidiWrapper> outPtr,
+    required this.portIndex,
     required RtMidiFFI bindings,
-  })  : _inPtr = inPtr,
-        _outPtr = outPtr,
-        _bindings = bindings;
+  }) : _bindings = bindings;
 
   void open() {
-    final portNameUtf8 = 'dart_rtmidi'.toNativeUtf8();
-    _bindings.rtmidi_open_port(_inPtr, 0, portNameUtf8.cast<Char>());
-    _bindings.rtmidi_open_port(_outPtr, 0, portNameUtf8.cast<Char>());
-    calloc.free(portNameUtf8);
+    // Create per-device instances (фикс shared!)
+    _inPtr = _bindings.rtmidi_in_create_default();
+    _outPtr = _bindings.rtmidi_out_create_default();
 
+    final portNameUtf8 = 'dart_rtmidi_$name'.toNativeUtf8();
+
+    // Open ports с index
+    _bindings.rtmidi_open_port(_inPtr!, portIndex, portNameUtf8.cast<Char>());
+    _bindings.rtmidi_open_port(_outPtr!, portIndex, portNameUtf8.cast<Char>());
+    malloc.free(portNameUtf8);
+
+    // Ignore types: не игнорить ничего
+    _bindings.rtmidi_in_ignore_types(_inPtr!, false, false, false);
+
+    // Setup stream
     _controller = StreamController<List<int>>.broadcast();
+
+    // Start polling (5ms для low-latency, без лагов)
     _startPolling();
-  }
 
-  void close() {
-    _pollTimer?.cancel();
-    _controller?.close();
-    _bindings.rtmidi_close_port(_inPtr);
-    _bindings.rtmidi_close_port(_outPtr);
-  }
+    // Чек ошибки после open
+    if (!_inPtr!.ref.ok) {
+      final errMsg = _inPtr!.ref.msg.cast<Utf8>().toDartString();
+      print('Error opening device $name: $errMsg');
+      close();  // Авто-close на ошибку
+      return;
+    }
 
-  void send(List<int> message) {
-    final msgPtr = calloc<UnsignedChar>(message.length);
-    for (var i = 0; i < message.length; i++) msgPtr[i] = message[i] & 0xFF;
-    _bindings.rtmidi_out_send_message(_outPtr.cast(), msgPtr, message.length);
-    calloc.free(msgPtr);
+    print('Opened MIDI device: $name on port $portIndex');
   }
-
-  Stream<List<int>> get messages => _controller!.stream;
 
   void _startPolling() {
-    const interval = Duration(milliseconds: 1);
+    const interval = Duration(milliseconds: 5);  // 5ms ~200Hz, хватит для MIDI
     _pollTimer = Timer.periodic(interval, (_) {
-      final sizePtr = calloc<Size>()..value = 1024;
+      final sizePtr = calloc<Size>()..value = 1024;  // Max MIDI msg ~1024 (sysex)
       final buf = calloc<UnsignedChar>(1024);
-      _bindings.rtmidi_in_get_message(_inPtr.cast(), buf, sizePtr);
-      final size = sizePtr.value;
+      final delta = _bindings.rtmidi_in_get_message(_inPtr!, buf, sizePtr);  // Читаем queue
+      final size = sizePtr.value as int;
       if (size > 0) {
         final data = buf.cast<Uint8>().asTypedList(size).toList();
-        _controller?.add(data);
+        _controller!.add(data);
+        print('MIDI in: $data');  // Debug лог (убери потом)
       }
       calloc.free(buf);
       calloc.free(sizePtr);
     });
+  }
+
+  void close() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+    if (_inPtr != null) {
+      _bindings.rtmidi_close_port(_inPtr!);
+      _bindings.rtmidi_in_free(_inPtr!);
+      _inPtr = null;
+    }
+    if (_outPtr != null) {
+      _bindings.rtmidi_close_port(_outPtr!);
+      _bindings.rtmidi_out_free(_outPtr!);
+      _outPtr = null;
+    }
+    _controller?.close();
+    _controller = null;
+  }
+
+  void send(List<int> message) {
+    if (_outPtr == null) throw StateError('Device not open');
+    final msgPtr = calloc<UnsignedChar>(message.length);
+    for (var i = 0; i < message.length; i++) {
+      msgPtr[i] = (message[i] & 0xFF).toUnsigned(8);
+    }
+    final result = _bindings.rtmidi_out_send_message(_outPtr!, msgPtr, message.length);
+    if (result < 0) print('Send error: $result');
+    malloc.free(msgPtr);
+  }
+
+  Stream<List<int>> get messages {
+    if (_controller == null) throw StateError('Device not open');
+    return _controller!.stream;
   }
 }
