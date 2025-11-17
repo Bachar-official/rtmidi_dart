@@ -6,6 +6,7 @@ import 'package:native_toolchain_c/native_toolchain_c.dart';
 import 'package:path/path.dart' as path;
 
 void main(List<String> args) async {
+  // Включаем логирование
   Logger.root.level = Level.ALL;
   hierarchicalLoggingEnabled = true;
 
@@ -16,18 +17,25 @@ void main(List<String> args) async {
     final packageRoot = input.packageRoot.path;
     final srcDir = path.join(packageRoot, 'src', 'rtmidi');
 
-    // === 1. ffigen ===
+    // ==========================
+    // 1. Генерация FFI binding
+    // ==========================
     logger.info('Generating bindings...');
     final configPath = path.join(packageRoot, 'ffigen.yaml');
     final ffigenResult = await Process.run('dart', [
-      'run', 'ffigen', '--config', configPath,
+      'run',
+      'ffigen',
+      '--config',
+      configPath,
     ]);
     if (ffigenResult.exitCode != 0) {
       logger.severe('ffigen failed: ${ffigenResult.stderr}');
       throw Exception('ffigen failed');
     }
 
-    // === 2. Compilation ===
+    // ==========================
+    // 2. Компиляция C/C++ кода
+    // ==========================
     logger.info('Compiling RtMidi...');
 
     final sources = [
@@ -35,6 +43,7 @@ void main(List<String> args) async {
       path.join(srcDir, 'rtmidi_c.cpp'),
     ];
 
+    // Определяем макросы по платформе
     final defines = <String, String?>{'RTMIDI_BUILD': null};
     if (Platform.isWindows) {
       defines['__WINDOWS_MM__'] = null;
@@ -47,6 +56,7 @@ void main(List<String> args) async {
       defines['__RTMIDI_AMIDI__'] = null;
     }
 
+    // Создаем библиотеку
     final cBuilder = CBuilder.library(
       name: 'librtmidi',
       assetName: 'librtmidi',
@@ -55,18 +65,9 @@ void main(List<String> args) async {
       defines: defines,
     );
 
+    // Запускаем компиляцию — новый API автоматически кладет .so в output
     await cBuilder.run(input: input, output: output, logger: logger);
 
-    // === 3. Copy to workdir (for dart run) ===
-    final buildDir = Directory.current;
-    final targetFile = File(path.join(buildDir.path, 'librtmidi.so'));
-    final sourceFile = File(path.join(packageRoot, '.dart_tool', 'native_assets', 'current', 'librtmidi.so'));
-
-    if (await sourceFile.exists()) {
-      await sourceFile.copy(targetFile.path);
-      logger.info('librtmidi.so copied to ${targetFile.path}');
-    }
-
-    logger.info('RtMidi ready for dart run');
+    logger.info('RtMidi built successfully! You can now use the plugin in Flutter.');
   });
 }
