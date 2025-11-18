@@ -11,13 +11,13 @@ void main(List<String> args) async {
     final srcDir = path.join(packageRoot, 'src', 'rtmidi');
 
     // Опционально: ffigen (можно запускать отдельно, но если хочешь каждый раз — ок)
-    final ffigenResult = await Process.run(
-      'dart',
-      ['run', 'ffigen', '--config', path.join(packageRoot, 'ffigen.yaml')],
-    );
-    if (ffigenResult.exitCode != 0) {
-      throw Exception('ffigen failed');
-    }
+    // final ffigenResult = await Process.run(
+    //   'dart',
+    //   ['run', 'ffigen', '--config', path.join(packageRoot, 'ffigen.yaml')],
+    // );
+    // if (ffigenResult.exitCode != 0) {
+    //   throw Exception('ffigen failed');
+    // }
 
     final sources = [
       path.join(srcDir, 'RtMidi.cpp'),
