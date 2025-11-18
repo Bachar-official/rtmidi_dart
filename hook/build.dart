@@ -38,6 +38,13 @@ void main(List<String> args) async {
       defines['__MACOSX_CORE__'] = null;
     }
 
+    final libraries = <String>[];
+    if (os == OS.linux) {
+      libraries.add('asound');
+    } else if (os == OS.windows) {
+      libraries.add('winmm');
+    }
+
     final builder = CBuilder.library(
       name: 'rtmidi',
       assetName: 'package:rtmidi_dart/rtmidi',  // ← это и есть ID asset
@@ -46,6 +53,7 @@ void main(List<String> args) async {
       defines: defines,
       language: Language.cpp,
       flags: ['-std=c++17', '-fexceptions', '-frtti'],
+      libraries: libraries,
     );
 
     // ← Это всё! CBuilder сам соберёт и зарегистрирует asset
