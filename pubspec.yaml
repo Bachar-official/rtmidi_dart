@@ -19,6 +19,20 @@ dev_dependencies:
   ffigen: ^12.0.0
   flutter_lints: ^6.0.0
 
+flutter:
+  plugin:
+    platforms:
+      android:
+        ffiNativeAssets: true
+      ios:
+        ffiNativeAssets: true
+      windows:
+        ffiNativeAssets: true
+      linux:
+        ffiNativeAssets: true
+      macos:
+        ffiNativeAssets: true
+
 ffigen:
   name: RtMidiFFI
   description: Generated bindings for RtMidi
