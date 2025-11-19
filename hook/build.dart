@@ -32,6 +32,7 @@ void main(List<String> args) async {
       case OS.android:
         defines['__ANDROID__'] = null;
         defines['__RTMIDI_AMIDI__'] = null;
+        defines['RTMIDI_NO_EXCEPTIONS'] = null;
       case OS.macOS:
       case OS.iOS:
         defines['__MACOSX_CORE__'] = null;
