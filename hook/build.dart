@@ -57,9 +57,7 @@ void main(List<String> args) async {
           '-static-libgcc',
           '-static-libstdc++',
         ] else ...[
-          '-fno-rtti',
-          '-fno-exceptions',
-          '-static-libgcc',
+          '-frtti', '-fexceptions',
           // НЕ линковать -lc++_static!
           // Стандартная практика Flutter NDK — использовать libc++_shared.so
           '-Wl,--gc-sections',
