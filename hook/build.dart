@@ -7,21 +7,17 @@ import 'package:path/path.dart' as path;
 
 void main(List<String> args) async {
   await build(args, (input, output) async {
-    final packageRoot = input.packageRoot.path;
-    final srcDir = path.join(packageRoot, 'src', 'rtmidi');
-
-    // Опционально: ffigen (можно запускать отдельно, но если хочешь каждый раз — ок)
-    // final ffigenResult = await Process.run(
-    //   'dart',
-    //   ['run', 'ffigen', '--config', path.join(packageRoot, 'ffigen.yaml')],
-    // );
-    // if (ffigenResult.exitCode != 0) {
-    //   throw Exception('ffigen failed');
-    // }
+    final context = path.Context(
+        style: Platform.isWindows ? path.Style.windows : path.Style.posix);
+    final packageRoot = Platform.isWindows
+        ? input.packageRoot.path.substring(1)
+        : input.packageRoot.path;
+    print('PACKAGE ROOT IS $packageRoot');
+    final srcDir = context.join(packageRoot, 'src', 'rtmidi');
 
     final sources = [
-      path.join(srcDir, 'RtMidi.cpp'),
-      path.join(srcDir, 'rtmidi_c.cpp'),
+      context.join(srcDir, 'RtMidi.cpp'),
+      context.join(srcDir, 'rtmidi_c.c'),
     ];
 
     final defines = <String, String?>{};
@@ -31,6 +27,7 @@ void main(List<String> args) async {
       defines['__LINUX_ALSA__'] = null;
     } else if (os == OS.windows) {
       defines['__WINDOWS_MM__'] = null;
+      defines['RTMIDI_EXPORT'] = null;
     } else if (os == OS.android) {
       defines['__ANDROID__'] = null;
       defines['__RTMIDI_AMIDI__'] = null;
@@ -45,14 +42,30 @@ void main(List<String> args) async {
       libraries.add('winmm');
     }
 
+    final flags = <String>[
+      // Только флаги, которые понимают ВСЕ компиляторы
+      if (input.config.code.targetOS == OS.windows) ...[
+        '/std:c++17',
+        '/EHsc',
+        '/GR',
+        '/D_CRT_SECURE_NO_WARNINGS',
+      ] else ...[
+        '-std=c++17',
+        '-fexceptions',
+        '-frtti',
+        '-static-libgcc',
+        '-static-libstdc++',
+      ],
+    ];
+
     final builder = CBuilder.library(
       name: 'rtmidi',
-      assetName: 'package:rtmidi_dart/rtmidi',  // ← это и есть ID asset
+      assetName: 'package:rtmidi_dart/rtmidi', // ← это и есть ID asset
       sources: sources,
       includes: [srcDir],
       defines: defines,
       language: Language.cpp,
-      flags: ['-std=c++17', '-fexceptions', '-frtti'],
+      flags: flags,
       libraries: libraries,
     );
 

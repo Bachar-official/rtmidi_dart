@@ -1,5 +1,7 @@
 import 'dart:ffi';
+import 'dart:io';
 import 'package:ffi/ffi.dart';
+import 'package:path/path.dart' as path;
 
 import 'bindings.dart';
 import 'midi_device.dart';
@@ -10,12 +12,11 @@ class RtMidi {
   RtMidi() : _bindings = RtMidiFFI(_loadLibrary());
 
   static DynamicLibrary _loadLibrary() {
-    try {
-      return DynamicLibrary.open('librtmidi');
-    } catch (e) {
-      // fallback: текущая папка
+    if (!Platform.isWindows) {
       return DynamicLibrary.open('librtmidi.so');
     }
+
+    return DynamicLibrary.open('.dart_tool\\lib\\rtmidi.dll');
   }
 
   RtMidiFFI get bindings => _bindings;

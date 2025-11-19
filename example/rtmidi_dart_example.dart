@@ -7,15 +7,17 @@ void main() async {
   // Get devices
   final List<MidiDevice> devices = await midi.devices;
 
+  devices.forEach(print);
+
   // Get first device and open it
   final firstDevice = devices.first..open();
 
   // Send message to device
-  firstDevice.send([144, 25, 90]);
+  // firstDevice.send([144, 25, 90]);
 
   // Listen for messages
-  firstDevice.messages.listen((data) => print(data));
+  firstDevice.messages.listen((data) => firstDevice.send(data));
 
   // Close device
-  firstDevice.close();
+  // firstDevice.close();
 }
