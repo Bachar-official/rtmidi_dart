@@ -51,17 +51,6 @@ void main(List<String> args) async {
         '/D_CRT_SECURE_NO_WARNINGS',
       ] else ...[
         '-std=c++17',
-        if (os != OS.android) ...[
-          '-fexceptions',
-          '-frtti',
-          '-static-libgcc',
-          '-static-libstdc++',
-        ] else ...[
-          '-frtti', '-fexceptions',
-          // НЕ линковать -lc++_static!
-          // Стандартная практика Flutter NDK — использовать libc++_shared.so
-          '-Wl,--gc-sections',
-        ],
       ],
     ];
 
@@ -74,7 +63,6 @@ void main(List<String> args) async {
       language: Language.cpp,
       flags: flags,
       libraries: libraries,
-      cppLinkStdLib: os == OS.android ? 'static' : 'dynamic',
     );
 
     await builder.run(input: input, output: output);
