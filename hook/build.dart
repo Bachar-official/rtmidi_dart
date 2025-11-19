@@ -76,6 +76,7 @@ void main(List<String> args) async {
       language: Language.cpp,
       flags: flags,
       libraries: libraries,
+      cppLinkStdLib: os == OS.android ? 'static' : 'dynamic',
     );
 
     await builder.run(input: input, output: output);
