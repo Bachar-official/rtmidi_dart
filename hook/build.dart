@@ -43,20 +43,25 @@ void main(List<String> args) async {
     }
 
     final flags = <String>[
-      // Только флаги, которые понимают ВСЕ компиляторы
-      if (input.config.code.targetOS == OS.windows) ...[
-        '/std:c++17',
-        '/EHsc',
-        '/GR',
-        '/D_CRT_SECURE_NO_WARNINGS',
-      ] else ...[
-        '-std=c++17',
-        '-fexceptions',
-        '-frtti',
-        '-static-libgcc',
-        '-static-libstdc++',
-      ],
-    ];
+  if (input.config.code.targetOS == OS.windows) ...[
+    '/std:c++17',
+    '/EHsc',
+    '/GR',
+    '/D_CRT_SECURE_NO_WARNINGS',
+  ] else ...[
+    '-std=c++17',
+    '-fexceptions',
+    '-frtti',
+    if (input.config.code.targetOS != OS.android) ...[
+      '-static-libgcc',
+      '-static-libstdc++',
+    ],
+    if (input.config.code.targetOS == OS.android) ...[
+      '-static-libgcc',
+      '-lc++_static',      // ← Статическая линковка libc++ на Android
+    ],
+  ],
+];
 
     final builder = CBuilder.library(
       name: 'rtmidi',
