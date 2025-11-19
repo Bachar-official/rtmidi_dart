@@ -15,7 +15,8 @@ class RtMidi {
   static DynamicLibrary _loadLibrary() {
     // Универсальное имя — Dart/Flutter сам подставит расширение и префикс
     // Работает на всех платформах без if/else
-    final libraryName = Platform.isWindows ? 'rtmidi' : (Platform.isAndroid ? 'librtmidi.so' : 'librtmidi');
+    // final libraryName = Platform.isWindows ? 'rtmidi' : (Platform.isAndroid ? 'librtmidi.so' : 'librtmidi');
+    final libraryName = 'rtmidi';
     
     try {
       return DynamicLibrary.open(libraryName);
