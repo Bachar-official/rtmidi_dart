@@ -46,8 +46,8 @@ void main(List<String> args) async {
     final flags = <String>[
       if (os == OS.windows) ...[
         '/std:c++17',
-        '/EHsc',                    // exceptions
-        '/GR',                      // RTTI
+        '/EHsc', // exceptions
+        '/GR', // RTTI
         '/D_CRT_SECURE_NO_WARNINGS',
       ] else ...[
         '-std=c++17',
@@ -57,11 +57,11 @@ void main(List<String> args) async {
           '-static-libgcc',
           '-static-libstdc++',
         ] else ...[
-          // Android — чисто, без зависимостей
           '-fno-rtti',
           '-fno-exceptions',
           '-static-libgcc',
-          '-lc++_static',           // ← ВСЁ, БОЛЬШЕ НИЧЕГО НЕ НУЖНО
+          // НЕ линковать -lc++_static!
+          // Стандартная практика Flutter NDK — использовать libc++_shared.so
           '-Wl,--gc-sections',
         ],
       ],
