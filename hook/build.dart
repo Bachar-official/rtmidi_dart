@@ -10,14 +10,14 @@ void main(List<String> args) async {
       style: Platform.isWindows ? path.Style.windows : path.Style.posix,
     );
     final packageRoot = Platform.isWindows
-        ? input.packageRoot.path.substring(1) // убираем ведущий '/'
+        ? input.packageRoot.path.substring(1)
         : input.packageRoot.path;
 
     final srcDir = context.join(packageRoot, 'src', 'rtmidi');
 
     final sources = [
       context.join(srcDir, 'RtMidi.cpp'),
-      context.join(srcDir, 'rtmidi_c.c'),
+      context.join(srcDir, 'rtmidi_c.c'), // оставь, если есть — не мешает
     ];
 
     final defines = <String, String?>{};
@@ -26,31 +26,40 @@ void main(List<String> args) async {
     switch (os) {
       case OS.linux:
         defines['__LINUX_ALSA__'] = null;
+        break;
       case OS.windows:
         defines['__WINDOWS_MM__'] = null;
         defines['RTMIDI_EXPORT'] = null;
+        break;
       case OS.android:
         defines['__ANDROID__'] = null;
-        defines['__RTMIDI_AMIDI__'] = null;
+        break;
       case OS.macOS:
       case OS.iOS:
         defines['__MACOSX_CORE__'] = null;
+        break;
       default:
     }
 
     final libraries = <String>[];
     if (os == OS.linux) libraries.add('asound');
     if (os == OS.windows) libraries.add('winmm');
+    if (os == OS.android) {
+      libraries.addAll([
+        'log',
+      ]); // ← КАКАШКА #2: НЕТ ЭТИХ БИБЛИОТЕК → ДОЛЖНО БЫТЬ!
+    }
 
-    // Флаги — красиво и по уму
     final flags = <String>[
       if (os == OS.windows) ...[
         '/std:c++17',
-        '/EHsc', // exceptions
-        '/GR', // RTTI
+        '/EHsc',
+        '/GR',
         '/D_CRT_SECURE_NO_WARNINGS',
       ] else ...[
         '-std=c++17',
+        '-fexceptions', // ← КАКАШКА #3: НЕТ НА ANDROID → ДОЛЖНО БЫТЬ!
+        '-frtti', // ← КАКАШКА #4: НЕТ НА ANDROID → ДОЛЖНО БЫТЬ!
       ],
     ];
 

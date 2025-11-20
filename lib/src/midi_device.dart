@@ -169,13 +169,20 @@ class MidiDevice {
 
   @override
   String toString() => 'MidiDevice("$name", in: $inputPort, out: $outputPort)';
+
+  
 }
 
 /// Вспомогательный класс для группировки портов по имени
 class MidiDeviceInfo {
   final String name;
+
   int? inputPort;
   int? outputPort;
+
+  // ← ОБЯЗАТЕЛЬНО ДОБАВЬ ЭТИ ДВА ПОЛЯ
+  Pointer<RtMidiWrapper>? inputPtr;
+  Pointer<RtMidiWrapper>? outputPtr;
 
   MidiDeviceInfo({required this.name});
 
