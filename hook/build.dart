@@ -6,6 +6,13 @@ import 'package:path/path.dart' as path;
 
 void main(List<String> args) async {
   await build(args, (input, output) async {
+    final os = input.config.code.targetOS;
+
+    if (os == OS.android) {
+      print('Android detected, skipping native compilation using MethodChannel');
+      return;
+    }
+
     final context = path.Context(
       style: Platform.isWindows ? path.Style.windows : path.Style.posix,
     );
@@ -20,8 +27,7 @@ void main(List<String> args) async {
       context.join(srcDir, 'rtmidi_c.c'), // оставь, если есть — не мешает
     ];
 
-    final defines = <String, String?>{};
-    final os = input.config.code.targetOS;
+    final defines = <String, String?>{};    
 
     switch (os) {
       case OS.linux:
@@ -30,9 +36,6 @@ void main(List<String> args) async {
       case OS.windows:
         defines['__WINDOWS_MM__'] = null;
         defines['RTMIDI_EXPORT'] = null;
-        break;
-      case OS.android:
-        defines['__ANDROID__'] = null;
         break;
       case OS.macOS:
       case OS.iOS:
@@ -44,11 +47,6 @@ void main(List<String> args) async {
     final libraries = <String>[];
     if (os == OS.linux) libraries.add('asound');
     if (os == OS.windows) libraries.add('winmm');
-    if (os == OS.android) {
-      libraries.addAll([
-        'log',
-      ]); // ← КАКАШКА #2: НЕТ ЭТИХ БИБЛИОТЕК → ДОЛЖНО БЫТЬ!
-    }
 
     final flags = <String>[
       if (os == OS.windows) ...[
@@ -58,8 +56,8 @@ void main(List<String> args) async {
         '/D_CRT_SECURE_NO_WARNINGS',
       ] else ...[
         '-std=c++17',
-        '-fexceptions', // ← КАКАШКА #3: НЕТ НА ANDROID → ДОЛЖНО БЫТЬ!
-        '-frtti', // ← КАКАШКА #4: НЕТ НА ANDROID → ДОЛЖНО БЫТЬ!
+        '-fexceptions',
+        '-frtti',
       ],
     ];
 
