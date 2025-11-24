@@ -24,7 +24,7 @@ void main(List<String> args) async {
 
     final sources = [
       context.join(srcDir, 'RtMidi.cpp'),
-      context.join(srcDir, 'rtmidi_c.c'), // оставь, если есть — не мешает
+      context.join(srcDir, 'rtmidi_c.c'),
     ];
 
     final defines = <String, String?>{};    

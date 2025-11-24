@@ -1,4 +1,3 @@
-// lib/src/midi_device.dart
 import 'dart:async';
 import 'dart:ffi';
 import 'dart:io';
@@ -7,7 +6,7 @@ import 'package:ffi/ffi.dart';
 
 import 'bindings.dart';
 
-/// Одно физическое MIDI-устройство (может иметь вход, выход или оба)
+/// One physical MIDI-device (can have input, output or both)
 class MidiDevice {
   final String name;
   final int? inputPort;
@@ -32,7 +31,7 @@ class MidiDevice {
     required RtMidiFFI bindings,
   }) : _bindings = bindings;
 
-  /// Создаёт устройство из собранной информации
+  /// Creates device from collected info
   factory MidiDevice.fromInfo(MidiDeviceInfo info, RtMidiFFI bindings) {
     return MidiDevice._(
       name: info.name,
@@ -42,7 +41,7 @@ class MidiDevice {
     );
   }
 
-  /// Открывает нужные порты (вход и/или выход)
+  /// Opens ports needed (input and/or output)
   void open() {
     if (!hasInput && !hasOutput) {
       throw StateError('Устройство $name не имеет ни входа, ни выхода');
@@ -52,7 +51,7 @@ class MidiDevice {
       _inPtr = _bindings.rtmidi_in_create_default();
       final clientName = 'rtmidi_dart_in_$name'.toNativeUtf8();
 
-      // ВАЖНО: сначала настраиваем игнорирование типов, потом открываем порт
+      // INMORTANT: setting ignore_types first, then open port
       _bindings.rtmidi_in_ignore_types(_inPtr!, false, false, false);
 
       _bindings.rtmidi_open_port(
@@ -79,7 +78,7 @@ class MidiDevice {
     print(
         'MIDI устройство открыто: $name  →  IN: $inputPort  OUT: $outputPort');
 
-    // Wake-up call (не трогаем — это для некоторых устройств)
+    // Wake-up call (for some devices)
     if (hasOutput && Platform.isWindows) {
       Future.delayed(const Duration(milliseconds: 80), () {
         if (_outPtr == null) return;
@@ -96,21 +95,21 @@ class MidiDevice {
   const int idleThresholdMs = 10;
   const int maxFlushMs = 200;
 
-  // --- Синхронный drain: читаем всё, ориентируясь ТОЛЬКО на sizePtr.value ---
+  // --- Sync drain: read all ONLY seeing at sizePtr.value ---
   final sizePtr = calloc<Size>()..value = bufferCapacity;
   final buffer = calloc<UnsignedChar>(bufferCapacity);
   int totalDrained = 0;
 
   while (true) {
-    // NOTE: binding должен возвращать double (timestamp) — но мы на него не опираемся
+    // NOTE: binding should return double (timestamp) but we ignore it
     _bindings.rtmidi_in_get_message(_inPtr!, buffer, sizePtr);
     final sizeNow = sizePtr.value;
     if (sizeNow <= 0) break;
     totalDrained++;
-    // проигнорированные/сброшенные байты
+    // ignored/reset bytes
   }
 
-  // --- Активная стабилизация: ждём пока поток "успокоится" ---
+  // --- Active stabilization: waiting while stream "calms down" ---
   final watch = Stopwatch()..start();
   int lastActivityAt = watch.elapsedMilliseconds;
   int extraDrained = 0;
@@ -121,7 +120,7 @@ class MidiDevice {
     if (sizeNow > 0) {
       extraDrained++;
       lastActivityAt = watch.elapsedMilliseconds;
-      // прочитать сразу все подряд (внутренний цикл)
+      // read all (inner loop)
       while (true) {
         _bindings.rtmidi_in_get_message(_inPtr!, buffer, sizePtr);
         final s2 = sizePtr.value;
@@ -134,19 +133,19 @@ class MidiDevice {
     if (watch.elapsedMilliseconds - lastActivityAt >= idleThresholdMs) {
       break;
     }
-    // короткая блокирующая пауза ~1ms — даёт устройству время, но ограничена maxFlushMs
+    // short blocking pause ~1ms for giving time to device but limited by maxFlushMs
     final target = watch.elapsedMilliseconds + 1;
     while (watch.elapsedMilliseconds < target) {}
   }
 
   print('rtmidi: drained initial $totalDrained msgs + $extraDrained msgs during stabilization');
 
-  // Освобождаем временные буферы
+  // Free temp buffers
   calloc.free(buffer);
   calloc.free(sizePtr);
   watch.stop();
 
-  // --- Polling timer: читаем все сообщения, опираясь ТОЛЬКО на sizePtr.value ---
+  // --- Polling timer: read all messages regarding ONLY on sizePtr.value ---
   const pollInterval = Duration(milliseconds: 2);
   _pollTimer = Timer.periodic(pollInterval, (_) {
     if (_inPtr == null) return;
@@ -163,7 +162,7 @@ class MidiDevice {
       try {
         _controller?.add(message);
       } catch (e) {
-        // на случай, если контроллер уже закрыт
+        // just in case if controller closed already
       }
     }
 
@@ -172,7 +171,7 @@ class MidiDevice {
   });
 }
 
-  /// Отправить сырое MIDI-сообщение
+  /// send raw MIDI-message
   void send(List<int> message) {
     if (_outPtr == null) {
       throw StateError('Выходной порт не открыт для устройства $name');
@@ -192,7 +191,7 @@ class MidiDevice {
     }
   }
 
-  /// Поток входящих MIDI-сообщений (только если открыт вход)
+  /// Stream of incoming MIDI-messages (only if input opened)
   Stream<List<int>> get messages {
     if (_controller == null) {
       throw StateError('Входной порт не открыт для устройства $name');
@@ -200,7 +199,7 @@ class MidiDevice {
     return _controller!.stream;
   }
 
-  /// Закрыть всё
+  /// Clsoe all
   void close() {
     _pollTimer?.cancel();
     _pollTimer = null;
@@ -226,14 +225,13 @@ class MidiDevice {
   String toString() => 'MidiDevice("$name", in: $inputPort, out: $outputPort)';
 }
 
-/// Вспомогательный класс для группировки портов по имени
+/// Auxiliary class for grouping devices by name
 class MidiDeviceInfo {
   final String name;
 
   int? inputPort;
   int? outputPort;
 
-  // ← ОБЯЗАТЕЛЬНО ДОБАВЬ ЭТИ ДВА ПОЛЯ
   Pointer<RtMidiWrapper>? inputPtr;
   Pointer<RtMidiWrapper>? outputPtr;
 

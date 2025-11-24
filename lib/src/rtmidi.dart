@@ -11,20 +11,15 @@ class RtMidi {
   RtMidi() : _bindings = RtMidiFFI(_loadLibrary());
 
   static DynamicLibrary _loadLibrary() {
-    // Универсальное имя — Dart/Flutter сам подставит расширение и префикс
-    // Работает на всех платформах без if/else
-    final libraryName = Platform.isWindows
-        ? 'rtmidi'
-        : (Platform.isAndroid ? 'librtmidi.so' : 'librtmidi');
-    // final libraryName = Platform.isWindows ? 'rtmidi' : 'librtmidi';
+    final libraryName = Platform.isWindows ? 'rtmidi' : 'librtmidi.so';
 
     try {
       return DynamicLibrary.open(libraryName);
     } catch (e) {
       throw StateError(
-        'Не удалось загрузить RtMidi библиотеку ($libraryName).\n'
-        'Убедитесь, что flutter pub get выполнен, и нативная библиотека собрана.\n'
-        'Ошибка: $e',
+        'Unable to load RtMidi library ($libraryName).\n'
+        'Please make sure flutter pub get executed.\n'
+        'Error: $e',
       );
     }
   }
@@ -54,7 +49,7 @@ class RtMidi {
       final normalized = _normalizeDeviceName(rawName);
       final info = grouped.putIfAbsent(normalized, () => MidiDeviceInfo(name: rawName));
       info.inputPort = i;
-      info.inputPtr = inPtr; // сохраняем только для освобождения позже
+      info.inputPtr = inPtr; // Save for freeing later
     }
   }
 
@@ -69,7 +64,7 @@ class RtMidi {
     }
   }
 
-  // ← ОСВОБОЖДАЕМ РОДИТЕЛЬСКИЕ УКАЗАТЕЛИ!
+  // Free parent pointers
   if (hasIn) _bindings.rtmidi_in_free(inPtr);
   if (hasOut) _bindings.rtmidi_out_free(outPtr);
 
@@ -100,7 +95,7 @@ class RtMidi {
         .replaceAll(RegExp(r'\s*(IN|OUT|\d+|:.*|Port \d+|\s+\d+)$'), '')
         .replaceAll(RegExp(r'\s+-\s+.*'), '')
         .replaceAll(RegExp(r'\s+\(.*\)$'),
-            '') // "Launchpad Pro (Port 1)" → "Launchpad Pro"
+            '') // Example: "Launchpad Pro (Port 1)" → "Launchpad Pro"
         .trim();
   }
 }
