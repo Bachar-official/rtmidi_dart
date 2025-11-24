@@ -1,6 +1,5 @@
-/// Support for doing something awesome.
+/// FFI wrapper for RtMidi library
 ///
-/// More dartdocs go here.
 library;
 
 export 'src/midi_device.dart';

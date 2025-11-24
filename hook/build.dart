@@ -1,4 +1,3 @@
-// hook/build.dart
 import 'dart:io';
 import 'package:code_assets/code_assets.dart';
 import 'package:hooks/hooks.dart';
@@ -7,57 +6,72 @@ import 'package:path/path.dart' as path;
 
 void main(List<String> args) async {
   await build(args, (input, output) async {
-    final packageRoot = input.packageRoot.path;
-    final srcDir = path.join(packageRoot, 'src', 'rtmidi');
+    final os = input.config.code.targetOS;
 
-    // Опционально: ffigen (можно запускать отдельно, но если хочешь каждый раз — ок)
-    // final ffigenResult = await Process.run(
-    //   'dart',
-    //   ['run', 'ffigen', '--config', path.join(packageRoot, 'ffigen.yaml')],
-    // );
-    // if (ffigenResult.exitCode != 0) {
-    //   throw Exception('ffigen failed');
-    // }
+    if (os == OS.android) {
+      print('Android detected, skipping native compilation using MethodChannel');
+      return;
+    }
+
+    final context = path.Context(
+      style: Platform.isWindows ? path.Style.windows : path.Style.posix,
+    );
+    final packageRoot = Platform.isWindows
+        ? input.packageRoot.path.substring(1)
+        : input.packageRoot.path;
+
+    final srcDir = context.join(packageRoot, 'src', 'rtmidi');
 
     final sources = [
-      path.join(srcDir, 'RtMidi.cpp'),
-      path.join(srcDir, 'rtmidi_c.cpp'),
+      context.join(srcDir, 'RtMidi.cpp'),
+      context.join(srcDir, 'rtmidi_c.c'),
     ];
 
-    final defines = <String, String?>{};
+    final defines = <String, String?>{};    
 
-    final os = input.config.code.targetOS;
-    if (os == OS.linux) {
-      defines['__LINUX_ALSA__'] = null;
-    } else if (os == OS.windows) {
-      defines['__WINDOWS_MM__'] = null;
-    } else if (os == OS.android) {
-      defines['__ANDROID__'] = null;
-      defines['__RTMIDI_AMIDI__'] = null;
-    } else if (os == OS.macOS) {
-      defines['__MACOSX_CORE__'] = null;
+    switch (os) {
+      case OS.linux:
+        defines['__LINUX_ALSA__'] = null;
+        break;
+      case OS.windows:
+        defines['__WINDOWS_MM__'] = null;
+        defines['RTMIDI_EXPORT'] = null;
+        break;
+      case OS.macOS:
+      case OS.iOS:
+        defines['__MACOSX_CORE__'] = null;
+        break;
+      default:
     }
 
     final libraries = <String>[];
-    if (os == OS.linux) {
-      libraries.add('asound');
-    } else if (os == OS.windows) {
-      libraries.add('winmm');
-    }
+    if (os == OS.linux) libraries.add('asound');
+    if (os == OS.windows) libraries.add('winmm');
+
+    final flags = <String>[
+      if (os == OS.windows) ...[
+        '/std:c++17',
+        '/EHsc',
+        '/GR',
+        '/D_CRT_SECURE_NO_WARNINGS',
+      ] else ...[
+        '-std=c++17',
+        '-fexceptions',
+        '-frtti',
+      ],
+    ];
 
     final builder = CBuilder.library(
       name: 'rtmidi',
-      assetName: 'package:rtmidi_dart/rtmidi',  // ← это и есть ID asset
+      assetName: 'package:rtmidi_dart/rtmidi',
       sources: sources,
       includes: [srcDir],
       defines: defines,
       language: Language.cpp,
-      flags: ['-std=c++17', '-fexceptions', '-frtti'],
+      flags: flags,
       libraries: libraries,
     );
 
-    // ← Это всё! CBuilder сам соберёт и зарегистрирует asset
     await builder.run(input: input, output: output);
-    // Больше ничего добавлять не нужно!
   });
 }
