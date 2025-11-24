@@ -1,12 +1,10 @@
 import 'package:rtmidi_dart/rtmidi_dart.dart';
 
 void main() async {
-  // Initialize library
-  final midi = RtMidi();
+  // Initialize library and get devices
+  final devices = await RtMidi.devices;
 
-  // Get devices
-  final List<MidiDevice> devices = await midi.devices;
-
+  // Get devices 
   devices.forEach(print);
 
   // Get first device and open it

@@ -4,10 +4,12 @@ import 'dart:io';
 
 import 'package:ffi/ffi.dart';
 
-import 'bindings.dart';
+import '../bindings.dart';
+import 'midi_device.dart';
 
 /// One physical MIDI-device (can have input, output or both)
-class MidiDevice {
+class MidiDeviceDesktop implements MidiDevice {
+  @override
   final String name;
   final int? inputPort;
   final int? outputPort;
@@ -20,11 +22,13 @@ class MidiDevice {
   StreamController<List<int>>? _controller;
   Timer? _pollTimer;
 
+  @override
   bool get hasInput => inputPort != null;
+  @override
   bool get hasOutput => outputPort != null;
   bool get isOpen => _inPtr != null || _outPtr != null;
 
-  MidiDevice._({
+  MidiDeviceDesktop._({
     required this.name,
     required this.inputPort,
     required this.outputPort,
@@ -32,8 +36,8 @@ class MidiDevice {
   }) : _bindings = bindings;
 
   /// Creates device from collected info
-  factory MidiDevice.fromInfo(MidiDeviceInfo info, RtMidiFFI bindings) {
-    return MidiDevice._(
+  factory MidiDeviceDesktop.fromInfo(MidiDeviceInfo info, RtMidiFFI bindings) {
+    return MidiDeviceDesktop._(
       name: info.name,
       inputPort: info.inputPort,
       outputPort: info.outputPort,
@@ -42,7 +46,8 @@ class MidiDevice {
   }
 
   /// Opens ports needed (input and/or output)
-  void open() {
+  @override
+  Future<void> open() async {
     if (!hasInput && !hasOutput) {
       throw StateError('Устройство $name не имеет ни входа, ни выхода');
     }
@@ -200,7 +205,8 @@ class MidiDevice {
   }
 
   /// Clsoe all
-  void close() {
+  @override
+  Future<void> close() async {
     _pollTimer?.cancel();
     _pollTimer = null;
 
