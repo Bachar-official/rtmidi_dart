@@ -1,50 +1,30 @@
 package dev.bachar.rtmidi_dart
 
 import android.content.Context
-import android.media.midi.MidiDevice
-import android.media.midi.MidiDeviceInfo
-import android.media.midi.MidiManager
+import android.media.midi.*
 import android.os.Handler
 import android.os.Looper
-import androidx.annotation.NonNull
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
-/**
- * USB/NATIVE MIDI plugin based on core of FlutterMidiCommand (without BLE).
- *
- * Methods:
- *  - getDevices()
- *  - openDevice(deviceId)
- *  - sendMessage({deviceId, message})
- *  - closeDevice(deviceId)
- *
- * Events:
- *  - device MIDI messages → EventChannel "rtmidi_dart/stream"
- */
-class RtMidiDartPlugin :
-    FlutterPlugin,
-    MethodChannel.MethodCallHandler,
-    EventChannel.StreamHandler {
-
-    private lateinit var methodChannel: MethodChannel
-    private lateinit var eventChannel: EventChannel
+class RtMidiDartPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, EventChannel.StreamHandler {
 
     private lateinit var context: Context
-    private lateinit var handler: Handler
-
+    private lateinit var methodChannel: MethodChannel
+    private lateinit var eventChannel: EventChannel
+    private var eventSink: EventChannel.EventSink? = null
+    private val handler = Handler(Looper.getMainLooper())
     private var midiManager: MidiManager? = null
 
-    private var eventSink: EventChannel.EventSink? = null
+    // deviceId → MidiDevice / Ports
+    private val openedDevices = mutableMapOf<String, MidiDevice>()
+    private val inputPorts = mutableMapOf<String, MidiInputPort>()    // Для отправки сообщений на устройство
+    private val outputPorts = mutableMapOf<String, MidiOutputPort>()  // Для получения сообщений с устройства
 
-    // Active connected devices
-    private val connectedDevices = mutableMapOf<String, ConnectedDevice>()
-
-    override fun onAttachedToEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
+    override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         context = binding.applicationContext
-        handler = Handler(Looper.getMainLooper())
         midiManager = context.getSystemService(Context.MIDI_SERVICE) as MidiManager
 
         methodChannel = MethodChannel(binding.binaryMessenger, "rtmidi_dart")
@@ -54,10 +34,114 @@ class RtMidiDartPlugin :
         eventChannel.setStreamHandler(this)
     }
 
-    override fun onDetachedFromEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
+    override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         methodChannel.setMethodCallHandler(null)
         eventChannel.setStreamHandler(null)
-        teardown()
+        closeAllDevices()
+    }
+
+    override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
+        when (call.method) {
+            "getDevices" -> result.success(getDevices())
+            "openDevice" -> openDevice(call.argument("deviceId")!!, result)
+            "sendMessage" -> {
+                val map = call.arguments as Map<*, *>
+                val deviceId = map["deviceId"] as String
+                val msg = (map["message"] as List<*>).map { (it as Number).toByte() }.toByteArray()
+                sendMessage(deviceId, msg, result)
+            }
+            "closeDevice" -> closeDevice(call.argument("deviceId")!!, result)
+            else -> result.notImplemented()
+        }
+    }
+
+    private fun getDevices(): List<Map<String, Any>> {
+        return midiManager?.devices?.map { info ->
+            mapOf(
+                "id" to info.id.toString(),
+                "name" to (info.properties.getString(MidiDeviceInfo.PROPERTY_NAME) ?: "Unknown"),
+                "manufacturer" to (info.properties.getString(MidiDeviceInfo.PROPERTY_MANUFACTURER) ?: ""),
+                "type" to when (info.type) {
+                    MidiDeviceInfo.TYPE_USB -> "usb"
+                    MidiDeviceInfo.TYPE_BLUETOOTH -> "ble"
+                    else -> "other"
+                },
+                "hasInput" to (info.inputPortCount > 0),
+                "hasOutput" to (info.outputPortCount > 0)
+            )
+        } ?: emptyList()
+    }
+
+    private fun openDevice(deviceId: String, result: MethodChannel.Result) {
+        val info = midiManager?.devices?.find { it.id.toString() == deviceId }
+            ?: return result.error("NOT_FOUND", "Device not found", null)
+
+        midiManager?.openDevice(info, { device ->
+            if (device == null) return@openDevice result.error("OPEN_FAILED", "Cannot open device", null)
+
+            openedDevices[deviceId] = device
+
+            // InputPort — для отправки данных на устройство
+            if (info.inputPortCount > 0) {
+                val inputPort: MidiInputPort? = device.openInputPort(0)
+                if (inputPort != null) {
+                    inputPorts[deviceId] = inputPort
+                }
+            }
+
+            // OutputPort — для получения данных с устройства
+            if (info.outputPortCount > 0) {
+                val outputPort: MidiOutputPort? = device.openOutputPort(0)
+                if (outputPort != null) {
+                    outputPorts[deviceId] = outputPort
+
+                    // MidiReceiver для EventChannel
+                    val receiver = object : MidiReceiver() {
+                        override fun onSend(msg: ByteArray?, offset: Int, count: Int, timestamp: Long) {
+                            if (msg == null || count == 0) return
+                            val message = msg.copyOfRange(offset, offset + count).map { it.toInt() and 0xFF }
+                            handler.post {
+                                eventSink?.success(mapOf(
+                                    "deviceId" to deviceId,
+                                    "message" to message
+                                ))
+                            }
+                        }
+                    }
+
+                    // Подключаем receiver через outputPort
+                    outputPort.connect(receiver)
+                }
+            }
+
+            result.success(true)
+        }, handler)
+    }
+
+    private fun sendMessage(deviceId: String, data: ByteArray, result: MethodChannel.Result) {
+        val inputPort: MidiInputPort? = inputPorts[deviceId]
+        if (inputPort != null) {
+            inputPort.send(data, 0, data.size)
+            result.success(true)
+        } else {
+            result.error("NOT_OPEN", "Device not opened", null)
+        }
+    }
+
+    private fun closeDevice(deviceId: String, result: MethodChannel.Result) {
+        inputPorts.remove(deviceId)?.close()
+        outputPorts.remove(deviceId)?.close()
+        openedDevices.remove(deviceId)?.close()
+        result.success(true)
+    }
+
+    private fun closeAllDevices() {
+        inputPorts.values.forEach { it.close() }
+        outputPorts.values.forEach { it.close() }
+        openedDevices.values.forEach { it.close() }
+        inputPorts.clear()
+        outputPorts.clear()
+        openedDevices.clear()
     }
 
     override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
@@ -66,147 +150,5 @@ class RtMidiDartPlugin :
 
     override fun onCancel(arguments: Any?) {
         eventSink = null
-    }
-
-    // ================================
-    // MethodChannel handler
-    // ================================
-    override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
-        when (call.method) {
-
-            "getDevices" -> {
-                result.success(listDevices())
-            }
-
-            "openDevice" -> {
-                val deviceId = call.argument<String>("deviceId")
-                if (deviceId == null) {
-                    result.error("INVALID_ARG", "deviceId required", null)
-                    return
-                }
-                openDevice(deviceId, result)
-            }
-
-            "sendMessage" -> {
-                val map = call.arguments as? Map<*, *> ?: run {
-                    result.error("INVALID_ARG", "Map required", null)
-                    return
-                }
-
-                val deviceId = map["deviceId"] as? String
-                val message = map["message"] as? List<*>
-
-                if (deviceId == null || message == null) {
-                    result.error("INVALID_ARG", "deviceId and message required", null)
-                    return
-                }
-
-                val byteArray = message.map { (it as Number).toInt().toByte() }.toByteArray()
-
-                sendToDevice(deviceId, byteArray, result)
-            }
-
-            "closeDevice" -> {
-                val deviceId = call.argument<String>("deviceId")
-                if (deviceId == null) {
-                    result.error("INVALID_ARG", "deviceId required", null)
-                    return
-                }
-                closeDevice(deviceId, result)
-            }
-
-            else -> result.notImplemented()
-        }
-    }
-
-    // ================================
-    // Device listing
-    // ================================
-    private fun listDevices(): List<Map<String, Any>> {
-        val mm = midiManager ?: return emptyList()
-        val devices = mm.devices
-        val list = mutableListOf<Map<String, Any>>()
-
-        for (info in devices) {
-            val id = Device.deviceIdForInfo(info)
-            val name = info.properties.getString(MidiDeviceInfo.PROPERTY_NAME) ?: "Unknown"
-            val manufacturer = info.properties.getString(MidiDeviceInfo.PROPERTY_MANUFACTURER) ?: ""
-
-            list.add(
-                mapOf(
-                    "id" to id,
-                    "name" to name,
-                    "manufacturer" to manufacturer,
-                    "hasInput" to (info.inputPortCount > 0),
-                    "hasOutput" to (info.outputPortCount > 0),
-                    "type" to "native"
-                )
-            )
-        }
-        return list
-    }
-
-    // ================================
-    // Device open/close
-    // ================================
-    private fun openDevice(deviceId: String, result: MethodChannel.Result) {
-        val info = midiManager?.devices?.find { Device.deviceIdForInfo(it) == deviceId }
-        if (info == null) {
-            result.error("NOT_FOUND", "Device not found: $deviceId", null)
-            return
-        }
-
-        midiManager?.openDevice(info, { device: MidiDevice? ->
-            if (device == null) {
-                result.error("OPEN_FAILED", "Failed to open device", null)
-                return@openDevice
-            }
-
-            val rxHandler = object : FMCStreamHandler(handler) {
-                override fun onDataReceived(data: ByteArray) {
-                    handler.post {
-                        eventSink?.success(
-                            mapOf(
-                                "deviceId" to deviceId,
-                                "message" to data.map { it.toInt() and 0xFF }
-                            )
-                        )
-                    }
-                }
-            }
-
-            val cd = ConnectedDevice(device, rxHandler)
-            connectedDevices[deviceId] = cd
-
-            cd.connect()
-
-            result.success(true)
-
-        }, handler)
-    }
-
-    private fun sendToDevice(deviceId: String, data: ByteArray, result: MethodChannel.Result) {
-        val dev = connectedDevices[deviceId]
-        if (dev == null) {
-            result.error("NOT_OPEN", "Device not opened", null)
-            return
-        }
-        try {
-            dev.send(data, null)
-            result.success(true)
-        } catch (e: Exception) {
-            result.error("SEND_FAILED", e.message, null)
-        }
-    }
-
-    private fun closeDevice(deviceId: String, result: MethodChannel.Result) {
-        connectedDevices[deviceId]?.close()
-        connectedDevices.remove(deviceId)
-        result.success(true)
-    }
-
-    private fun teardown() {
-        connectedDevices.values.forEach { it.close() }
-        connectedDevices.clear()
     }
 }

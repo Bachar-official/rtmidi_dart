@@ -3,32 +3,29 @@ plugins {
     id("kotlin-android")
 }
 
-rootProject.allprojects {
-    repositories {
-        google()
-        jcenter()
-        mavenCentral()
-    }
-}
-
 android {
     namespace = "dev.bachar.rtmidi_dart"
-    compileSdk = 34 // use flutter.compileSdkVersion  when Flutter 3.27.0 is widely used
+    compileSdk = 34
+
+    defaultConfig {
+        minSdk = 23
+    }
 
     sourceSets {
         getByName("main").java.srcDirs("src/main/kotlin")
-        getByName("test").java.srcDirs("src/test/kotlin")
-    }
-    defaultConfig {
-        minSdkVersion(21)
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_1_8.toString()
+        jvmTarget = "1.8"
     }
+}
 
-    dependencies {
-        testImplementation("org.jetbrains.kotlin:kotlin-test")
-        testImplementation("org.mockito:mockito-core:5.0.0")
-    }
+repositories {
+    google()
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation("org.jetbrains.kotlin:kotlin-test")
+    testImplementation("org.mockito:mockito-core:5.0.0")
 }
