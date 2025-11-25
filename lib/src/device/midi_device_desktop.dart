@@ -177,6 +177,7 @@ class MidiDeviceDesktop implements MidiDevice {
 }
 
   /// send raw MIDI-message
+  @override
   void send(List<int> message) {
     if (_outPtr == null) {
       throw StateError('Выходной порт не открыт для устройства $name');
@@ -197,6 +198,7 @@ class MidiDeviceDesktop implements MidiDevice {
   }
 
   /// Stream of incoming MIDI-messages (only if input opened)
+  @override
   Stream<List<int>> get messages {
     if (_controller == null) {
       throw StateError('Входной порт не открыт для устройства $name');

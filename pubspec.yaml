@@ -22,12 +22,13 @@ dev_dependencies:
   ffigen: ^12.0.0
   flutter_lints: ^6.0.0
 
-fflutter:
+flutter:
   plugin:
     platforms:
       android:
         package: dev.bachar.rtmidi_dart
         pluginClass: RtMidiDartPlugin
+        ffiPlugin: false
       windows:
         ffiPlugin: true
       linux:
